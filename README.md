@@ -18,6 +18,6 @@
 
 ## Project details 
 Library used :
-  - RadioHead : RF95
+  - RadioHead : RF95 (http://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html)
   - TFT Terminal for display scrolling
   - M5Stack
