@@ -12,13 +12,15 @@ RH_RF95 rf95(RFM95_CS, RFM95_DI00); //instance couche radio
 
 #define RF95_MAX_MESSAGE_LEN 128
 
-uint8_t state, i, RxSeq;
+uint8_t state, i, j, RxSeq;
 uint32_t attente; //full-duplex
 uint8_t rxbuf[RF95_MAX_MESSAGE_LEN]; // Tableau de trames recues de taille RF95_MAX_MESSAGE_LEN
 uint8_t txbuf[RF95_MAX_MESSAGE_LEN];
 uint8_t rxbuflen = RF95_MAX_MESSAGE_LEN; //Taille max buffer 
 uint8_t rxlen = RF95_MAX_MESSAGE_LEN; //Taille trame recue
 uint8_t txlen = RF95_MAX_MESSAGE_LEN;
+uint8_t FCSc[1];
+uint8_t FCSr;
 // int rxFrames; //Nbr de trames recues
 char str_out[255];
 
@@ -66,11 +68,29 @@ void loop (){
       if (rf95.recv(rxbuf, &rxlen)){
         if (rxbuf[0] == TYPE_DATA)
         {
-          state = E2;
+          // for (i=0; i<=rxlen-1; i++)
+          // {
+          //     Serial.printf("%d ", rxbuf[i]);
+          // } 
+          FCSr = rxbuf[rxlen-1];
+          //Serial.printf("rxlen : %d\n", rxlen);
+          //Serial.printf("\nFCS Recus : %d\n", FCSr);
+          FCSc[0] = 0;
+          for (i=0; i<=rxlen-2; i++)
+          {
+              FCSc[0] = FCSc[0] ^ rxbuf[i];
+          }
+          //Serial.printf("\nFCS Calcule : %d", FCSc[0]);
+          if (FCSc[0]==FCSr)
+          {
+            state = E2;
+            Serial.printf("E2 ok\n");
+          }
+          else { state = E0; }
         }
-        else 
+      else 
           state = E0;
-        }
+      }
     break;
 
     case E2:
@@ -80,14 +100,15 @@ void loop (){
           snprintf(str_out, sizeof(str_out), "Rx SEQ n. : %d, Taille :  %d octets\r", RxSeq, rxlen);
           printString(str_out);
           int h = 0;
-          for (j=2; j<rxlen; j++) //Avoid the two first (DATA_TYPE and ACK) bytes to only show the payload
+          memset(str_out, 0, sizeof(str_out));
+          for (j=2; j<rxlen-1; j++) //Avoid the two first (DATA_TYPE and ACK) bytes to only show the payload
           {
             //Serial.printf("%d ", rxbuf[j]);
             str_out[h] = rxbuf[j]; //Geerate the payload string.
             h++;
           }
-          //Serial.println();
           printString(str_out);
+          Serial.printf("\n%s", str_out);
           printString("\r");
         }
       else 
@@ -102,7 +123,8 @@ void loop (){
       printString("Sending ACK\r");
       txbuf[0] = TYPE_ACK;
       txbuf[1] = rxbuf[1];
-      rf95.send(txbuf, 2);
+      txbuf[2] = txbuf[0] ^ txbuf[1];
+      rf95.send(txbuf, 3);
       rf95.waitPacketSent();
       state = E0;
       break;

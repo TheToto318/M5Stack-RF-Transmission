@@ -18,7 +18,9 @@ uint8_t txbuf[rf95_MAX_MESSAGE_LEN]; // tableau de trames à émettre de taille 
 uint8_t rxbuf[rf95_MAX_MESSAGE_LEN];
 uint8_t txbuflen = rf95_MAX_MESSAGE_LEN; //taille trame à émettre
 uint8_t rxlen = rf95_MAX_MESSAGE_LEN;
-char data_to_send[] = "Une tres tres longue phrase a transmettre !";
+uint8_t FCS[1]; //Champ de controle d'un octet
+int i; //Index
+char data_to_send[] = "Salut !";
 char str_out[255]; //String for data output on screen
 
 #define E0 0 // Initialize sending
@@ -42,9 +44,9 @@ void setup (){
     printString("rf95 init OK\r");
 
   //config fréquence radio
-  rf95.setTxPower(8);
-  rf95.setModemConfig(RH_RF95::Bw125Cr45Sf128);
-  rf95.setFrequency(867.7);
+  rf95.setTxPower(8); //8dbm
+  rf95.setModemConfig(RH_RF95::Bw125Cr45Sf128); 
+  rf95.setFrequency(867.7); //137 to 1020 Mhz
 
   state = E0; //état de départ
 
@@ -66,6 +68,20 @@ void loop () {
 
       memcpy(txbuf+2, data_to_send, sizeof(data_to_send)); //Merge frame prefix with payload
 
+      FCS[0] = 0;
+      for (i=0; i<=sizeof(data_to_send); i++)
+      {
+        FCS[0] = FCS[0] ^ txbuf[i];
+      }
+
+      Serial.printf("\nFCS Calcule : %d\n", FCS[0]);
+
+      memcpy(txbuf+sizeof(data_to_send)+1, FCS, sizeof(FCS));
+
+      for (i=0; i<=sizeof(data_to_send)+1; i++)
+      {
+              Serial.printf("%d ", txbuf[i]);
+      } 
       rf95.send(txbuf, sizeof(data_to_send)+2); //Size of the frame = DATA_TYPE + ACK + Payload = payload size + 2 bytes
       rf95.waitPacketSent();
 
@@ -90,9 +106,14 @@ void loop () {
       else {
         if (rf95.recv(rxbuf, &rxlen))
         {
-          if ((rxbuf[0] == TYPE_ACK) && (rxbuf[1] == TxSeq)) //Check if the frame is an ACK and the received code is matching the data frame number.
+          //rxbuf[2] = rxbuf[2] + 1; //simulate XOR error on ACK
+          if ((rxbuf[0] == TYPE_ACK) && (rxbuf[1] == TxSeq) && ((rxbuf[0] ^ rxbuf[1])==rxbuf[2])) //Check if the frame is an ACK and the received code is matching the data frame number.
             { state = E4; }
           else state = E2;
+          if ((rxbuf[0] == TYPE_ACK) && (rxbuf[1] == TxSeq) && ((rxbuf[0] ^ rxbuf[1])!=rxbuf[2]))
+          {
+            state = E5;
+          }
         }
       }
       break;
@@ -106,7 +127,7 @@ void loop () {
     case E5:
       if (credit == 0)
       {
-        printString("Timout\r");
+        printString("Transmission failed\r");
         state = E0;
         credit = 5; TxSeq++;
         break;
