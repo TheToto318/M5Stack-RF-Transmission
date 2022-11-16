@@ -19,6 +19,12 @@ uint8_t rxbuf[rf95_MAX_MESSAGE_LEN];
 uint8_t txbuflen = rf95_MAX_MESSAGE_LEN; //taille trame à émettre
 uint8_t rxlen = rf95_MAX_MESSAGE_LEN;
 uint8_t FCS[1]; //Champ de controle d'un octet
+uint16_t S; //Code correcteur d'erreur
+uint16_t SP; 
+uint8_t lS[2]; //S sur deux octets
+uint8_t lSP[2];//SP sur deux octets
+
+
 int i; //Index
 char data_to_send[] = "Salut !";
 char str_out[255]; //String for data output on screen
@@ -63,26 +69,51 @@ void loop () {
       snprintf(str_out, sizeof(str_out), "Sending %d : \r", TxSeq);
       printString(str_out);
 
+      //Ajout numéro et type trame
+
       txbuf[0] = TYPE_DATA;
       txbuf[1] = TxSeq;
 
       memcpy(txbuf+2, data_to_send, sizeof(data_to_send)); //Merge frame prefix with payload
-
+  	  
+      //Add detector error code
       FCS[0] = 0;
       for (i=0; i<=sizeof(data_to_send); i++)
       {
         FCS[0] = FCS[0] ^ txbuf[i];
       }
 
-      Serial.printf("\nFCS Calcule : %d\n", FCS[0]);
-
       memcpy(txbuf+sizeof(data_to_send)+1, FCS, sizeof(FCS));
 
-      for (i=0; i<=sizeof(data_to_send)+1; i++)
+      //Add error correcting code
+      S=0; SP=0;
+      for (i=0; i<=sizeof(data_to_send); i++)
+      {
+        Serial.printf("%d ", txbuf[i]);
+        S = S + txbuf[i];
+        SP = SP + txbuf[i]*(i+1);
+      }
+
+      Serial.printf("\nS = %d\n", S);
+      Serial.printf("SP = %d\n", SP);
+
+      lS[0] = S & 0x00FF;
+      lS[1] = (S & 0xFF00) >>8;
+
+      lSP[0] = SP & 0x00FF;
+      lSP[1] = (SP & 0xFF00) >>8;
+
+      memcpy(txbuf+sizeof(data_to_send)+2, lS, sizeof(lS));
+      memcpy(txbuf+sizeof(data_to_send)+4, lSP, sizeof(lSP));
+
+      for (i=0; i<=sizeof(data_to_send)+5; i++)
       {
               Serial.printf("%d ", txbuf[i]);
       } 
-      rf95.send(txbuf, sizeof(data_to_send)+2); //Size of the frame = DATA_TYPE + ACK + Payload = payload size + 2 bytes
+
+      Serial.println();
+
+      rf95.send(txbuf, sizeof(data_to_send)+6); //Size of the frame = DATA_TYPE + ACK + Payload = payload size + 2 bytes
       rf95.waitPacketSent();
 
       credit--; //Decrement retry count
