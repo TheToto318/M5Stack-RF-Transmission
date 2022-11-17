@@ -14,14 +14,16 @@ int main()
     uint8_t lSP[2];//SP sur deux octets
 
     final_str[0] = 1;
-    final_str[1] = 0;
+    final_str[1] = 2;
+    final_str[2] = 3;
+    final_str[3] = 4;
 
     printf("Taille data debut : %d\n", sizeof(data_to_send));
 
     //memcpy(final_str, txbuf_prefix, sizeof(txbuf_prefix));
     //memcpy(final_str+sizeof(txbuf_prefix), (uint8_t*)data_to_send, sizeof(data_to_send));
 
-    memcpy(final_str+2, data_to_send, sizeof(data_to_send));
+    memcpy(final_str+4, data_to_send, sizeof(data_to_send));
 
     printf("Taille FCS : %d\n", sizeof(FCS));
 
@@ -30,25 +32,29 @@ int main()
         printf("%d ", final_str[i]);
     }
 
+    printf("\n");
+
     FCS[0] = 0;
-    for (i=0; i<=sizeof(data_to_send); i++)
+    for (i=0; i<=sizeof(data_to_send)+2; i++)
     {
+        printf("%d ", final_str[i]);
         FCS[0] = FCS[0] ^ final_str[i];
     }
 
-    memcpy(final_str+sizeof(data_to_send)+1, FCS, sizeof(FCS));
+    memcpy(final_str+sizeof(data_to_send)+3, FCS, sizeof(FCS));
 
     printf("\nFCS = %d\n", FCS[0]);
 
-    for (i=0; i<=sizeof(data_to_send)+1; i++)
+    for (i=0; i<=sizeof(data_to_send)+3; i++)
     {
         printf("%d ", final_str[i]);
     }
-
+    printf("\n");
     //Add error correcting code
       S=0; SP=0;
-      for (i=0; i<=sizeof(data_to_send); i++)
+      for (i=4; i<=sizeof(data_to_send)+2; i++)
       {
+        printf("%d ", final_str[i]);
         S = S + final_str[i];
         SP = SP + final_str[i]*(i+1);
       }
@@ -65,26 +71,26 @@ int main()
       printf("\nSP0 = %d\n", lSP[0]);
       printf("SP1 = %d\n", lSP[1]);
 
-      memcpy(final_str+sizeof(data_to_send)+2, lS, sizeof(lS));
+      memcpy(final_str+sizeof(data_to_send)+4, lS, sizeof(lS));
 
       printf("\n");
-
-    for (i=0; i<=sizeof(data_to_send)+3; i++)
-    {
-        printf("%d ", final_str[i]);
-    }
-
-    printf("\n");
-
-    memcpy(final_str+sizeof(data_to_send)+4, lSP, sizeof(lSP));
-
 
     for (i=0; i<=sizeof(data_to_send)+5; i++)
     {
         printf("%d ", final_str[i]);
     }
 
+    printf("\n");
+
+    memcpy(final_str+sizeof(data_to_send)+6, lSP, sizeof(lSP));
+
+
+    for (i=0; i<=sizeof(data_to_send)+7; i++)
+    {
+        printf("%d ", final_str[i]);
+    }
+
 
     printf("\nTaille txbuf : %d\n", sizeof(final_str));
-    printf("Taille data complete : %d\n", sizeof(data_to_send)+5);
+    printf("Taille data complete : %d\n", sizeof(data_to_send)+7);
 }

@@ -12,7 +12,7 @@ RH_RF95 rf95(RFM95_CS, RFM95_DI00); //instance couche radio
 
 #define rf95_MAX_MESSAGE_LEN 128 //Taulle max message -> 128 octets.
 
-uint8_t state, RxSeq, TxSeq, credit; //état courant
+uint8_t state, RxSeq, TxSeq, credit, backoff, NewFrame, EIT; //état courant
 uint32_t attente; // Durée chien de garde
 uint8_t txbuf[rf95_MAX_MESSAGE_LEN]; // tableau de trames à émettre de taille rf95_MAX_MESSAGE_LEN 
 uint8_t rxbuf[rf95_MAX_MESSAGE_LEN];
@@ -40,6 +40,9 @@ char str_out[255]; //String for data output on screen
 #define TYPE_ACK 2
 #define TIMEOUT_ACK 4000 //Watchdog -> 4 sec
 
+#define MyAddr 1
+#define ReAddr 0
+
 void setup (){
   //Serial.begin(115200);
   M5.begin();
@@ -60,34 +63,50 @@ void setup (){
 
   TxSeq = 0; credit = 5;
 
+  NewFrame = 1;
+  randomSeed(analogRead(3));
+
   printString("initialization complete\r");
 }
 
 void loop () {
   switch (state) {
     case E0:
+      if (NewFrame == 1)
+      {
+        EIT = random(5, 100);
+        delay(EIT);
+        snprintf(str_out, sizeof(str_out), "EIT %d : \r", EIT);
+        printString(str_out);
+      }
+      
+      snprintf(str_out, sizeof(str_out), "New Frame ? : %d\r", NewFrame);
+      printString(str_out);
+
       snprintf(str_out, sizeof(str_out), "Sending %d : \r", TxSeq);
       printString(str_out);
 
-      //Ajout numéro et type trame
+      //Add sender and receiver address + data type and seq number.
 
-      txbuf[0] = TYPE_DATA;
-      txbuf[1] = TxSeq;
+      txbuf[0] = MyAddr;
+      txbuf[1] = ReAddr;
+      txbuf[2] = TYPE_DATA;
+      txbuf[3] = TxSeq;
 
-      memcpy(txbuf+2, data_to_send, sizeof(data_to_send)); //Merge frame prefix with payload
+      memcpy(txbuf+4, data_to_send, sizeof(data_to_send)); //Merge frame prefix with payload
   	  
       //Add detector error code
       FCS[0] = 0;
-      for (i=0; i<=sizeof(data_to_send); i++)
+      for (i=0; i<=sizeof(data_to_send)+2; i++)
       {
         FCS[0] = FCS[0] ^ txbuf[i];
       }
 
-      memcpy(txbuf+sizeof(data_to_send)+1, FCS, sizeof(FCS));
+      memcpy(txbuf+sizeof(data_to_send)+3, FCS, sizeof(FCS));
 
       //Add error correcting code
       S=0; SP=0;
-      for (i=0; i<=sizeof(data_to_send); i++)
+      for (i=0; i<=sizeof(data_to_send)+2; i++)
       {
         Serial.printf("%d ", txbuf[i]);
         S = S + txbuf[i];
@@ -103,17 +122,17 @@ void loop () {
       lSP[0] = SP & 0x00FF;
       lSP[1] = (SP & 0xFF00) >>8;
 
-      memcpy(txbuf+sizeof(data_to_send)+2, lS, sizeof(lS));
-      memcpy(txbuf+sizeof(data_to_send)+4, lSP, sizeof(lSP));
+      memcpy(txbuf+sizeof(data_to_send)+4, lS, sizeof(lS));
+      memcpy(txbuf+sizeof(data_to_send)+6, lSP, sizeof(lSP));
 
-      for (i=0; i<=sizeof(data_to_send)+5; i++)
+      for (i=0; i<=sizeof(data_to_send)+7; i++)
       {
               Serial.printf("%d ", txbuf[i]);
       } 
 
       Serial.println();
 
-      rf95.send(txbuf, sizeof(data_to_send)+6); //Size of the frame = DATA_TYPE + ACK + Payload = payload size + 2 bytes
+      rf95.send(txbuf, sizeof(data_to_send)+8); //Size of the frame = DATA_TYPE + ACK + Payload = payload size + 2 bytes
       rf95.waitPacketSent();
 
       credit--; //Decrement retry count
@@ -138,10 +157,10 @@ void loop () {
         if (rf95.recv(rxbuf, &rxlen))
         {
           //rxbuf[2] = rxbuf[2] + 1; //simulate XOR error on ACK
-          if ((rxbuf[0] == TYPE_ACK) && (rxbuf[1] == TxSeq) && ((rxbuf[0] ^ rxbuf[1])==rxbuf[2])) //Check if the frame is an ACK and the received code is matching the data frame number.
+          if ((rxbuf[2] == TYPE_ACK) && (rxbuf[3] == TxSeq) && ((rxbuf[2] ^ rxbuf[3])==rxbuf[4]) && (rxbuf[1]==MyAddr))//Check if the frame is an ACK and the received code is matching the data frame number.
             { state = E4; }
           else state = E2;
-          if ((rxbuf[0] == TYPE_ACK) && (rxbuf[1] == TxSeq) && ((rxbuf[0] ^ rxbuf[1])!=rxbuf[2]))
+          if ((rxbuf[2] == TYPE_ACK) && (rxbuf[3] == TxSeq) && ((rxbuf[2] ^ rxbuf[3])!=rxbuf[4]))
           {
             state = E5;
           }
@@ -151,7 +170,6 @@ void loop () {
     
     case E4:
       printString("ACK_RECEIVED\r");
-      delay(2000);
       state = E0; TxSeq++; credit = 5;
       break;
     
@@ -159,16 +177,19 @@ void loop () {
       if (credit == 0)
       {
         printString("Transmission failed\r");
-        state = E0;
+        state = E0; NewFrame = 1;
         credit = 5; TxSeq++;
         break;
       }
       else 
       {
-      snprintf(str_out, sizeof(str_out), "Retry n. %d : \r", 5-credit);
+      snprintf(str_out, sizeof(str_out), "Collision ? Retry n. %d : \r", 5-credit);
       printString(str_out);
-      state = E0;
-      delay(2000); //Wait two sec before sending again.
+      snprintf(str_out, sizeof(str_out), "Backoff : %d : \r", backoff);
+      printString(str_out);
+      backoff = random(0,100);
+      delay(backoff);
+      state = E0; NewFrame = 0;
       break;
       }
 

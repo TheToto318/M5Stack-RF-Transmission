@@ -35,6 +35,8 @@ char str_out[255];
 #define TYPE_DATA 1
 #define TYPE_ACK 2
 
+#define Myadr 0
+
 void setup (){
   Serial.begin(115200);
   M5.begin();
@@ -69,8 +71,8 @@ void loop (){
     case E1:
       rxlen = RF95_MAX_MESSAGE_LEN;
       if (rf95.recv(rxbuf, &rxlen)){
-        state = E5;
-        rxbuf[2] = 140; // Generate error on frame.
+        state = E4;
+        rxbuf[4] = 140; // Generate error on frame.
       }
       else {
           delay(2000);
@@ -117,7 +119,6 @@ void loop (){
             snprintf(str_out, sizeof(str_out), "Correcting %d to %d\r", rxbuf[rang-1], rxbuf[rang-1]-erreur);
             printString(str_out);
             rxbuf[rang-1] = rxbuf[rang-1] - erreur;
-            delay(3000);
             state = E2;
           }
           else
@@ -127,7 +128,6 @@ void loop (){
               memset(str_out, 0, sizeof(str_out));
               snprintf(str_out, sizeof(str_out), "Error on redundancy\r");
               printString(str_out);
-              delay(3000);
               state = E0;
             }
         }
@@ -139,7 +139,11 @@ void loop (){
     break;
 
     case E5:
-      if (rxbuf[0] == TYPE_DATA)
+      if (rxbuf[1]!=Myadr)
+      {
+        state = E0;
+      }      
+      if (rxbuf[2] == TYPE_DATA)
         {
           for (i=0; i<=rxlen-1; i++)
           {
@@ -167,14 +171,14 @@ void loop (){
 
 
     case E2:
-      if (RxSeq != rxbuf[1])
+      if (RxSeq != rxbuf[3])
         {
-          RxSeq = rxbuf[1];
+          RxSeq = rxbuf[3];
           snprintf(str_out, sizeof(str_out), "Rx SEQ n. : %d, Taille :  %d octets\r", RxSeq, rxlen);
           printString(str_out);
           int h = 0;
           memset(str_out, 0, sizeof(str_out));
-          for (j=2; j<=rxlen-6; j++) //Avoid the two first (DATA_TYPE and ACK) bytes to only show the payload
+          for (j=4; j<=rxlen-6; j++) //Avoid the two first (DATA_TYPE and ACK) bytes to only show the payload
           {
             //Serial.printf("%d ", rxbuf[j]);
             str_out[h] = rxbuf[j]; //Geerate the payload string.
@@ -194,10 +198,12 @@ void loop (){
     
     case E3:
       printString("Sending ACK\r");
-      txbuf[0] = TYPE_ACK;
-      txbuf[1] = rxbuf[1];
-      txbuf[2] = txbuf[0] ^ txbuf[1];
-      rf95.send(txbuf, 3);
+      txbuf[0] = Myadr;
+      txbuf[1] = rxbuf[0];
+      txbuf[2] = TYPE_ACK;
+      txbuf[3] = rxbuf[3];
+      txbuf[4] = txbuf[2] ^ txbuf[3];
+      rf95.send(txbuf, 5);
       rf95.waitPacketSent();
       state = E0;
       break;
