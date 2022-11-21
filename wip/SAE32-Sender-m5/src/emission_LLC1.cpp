@@ -156,14 +156,30 @@ void loop () {
       else {
         if (rf95.recv(rxbuf, &rxlen))
         {
-          //rxbuf[2] = rxbuf[2] + 1; //simulate XOR error on ACK
-          if ((rxbuf[2] == TYPE_ACK) && (rxbuf[3] == TxSeq) && ((rxbuf[2] ^ rxbuf[3])==rxbuf[4]) && (rxbuf[1]==MyAddr))//Check if the frame is an ACK and the received code is matching the data frame number.
-            { state = E4; }
-          else state = E2;
-          if ((rxbuf[2] == TYPE_ACK) && (rxbuf[3] == TxSeq) && ((rxbuf[2] ^ rxbuf[3])!=rxbuf[4]))
-          {
+          if (rxbuf[1] != MyAddr) {
+            printString("Incorrect destination address\r");
+            state = E2;
+          }
+          
+          if (rxbuf[2] != TYPE_ACK) {
+            printString("Frame is not ACK type\r");
+            state = E2;
+          }
+
+          if (rxbuf[3] != TxSeq) {
+            printString("Incorrect ACK sequence number\r");
+            state = E2;
+          }
+
+          if ((rxbuf[2] ^ rxbuf[3])!=rxbuf[4]) {
+            printString("ACK frame corrupted, retrying...\r");
             state = E5;
           }
+
+          state = E4;
+
+          
+          //rxbuf[2] = rxbuf[2] + 1; //simulate XOR error on ACK
         }
       }
       break;
@@ -176,7 +192,6 @@ void loop () {
     case E5:
       if (credit == 0)
       {
-        printString("Transmission failed\r");
         state = E0; NewFrame = 1;
         credit = 5; TxSeq++;
         break;
