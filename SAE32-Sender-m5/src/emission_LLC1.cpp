@@ -16,7 +16,7 @@ uint8_t state, RxSeq, TxSeq, credit, backoff, NewFrame, EIT; //état courant
 uint32_t attente; // Durée chien de garde
 uint8_t txbuf[rf95_MAX_MESSAGE_LEN]; // tableau de trames à émettre de taille rf95_MAX_MESSAGE_LEN 
 uint8_t rxbuf[rf95_MAX_MESSAGE_LEN];
-uint8_t txbuflen = rf95_MAX_MESSAGE_LEN; //taille trame à émettre
+//uint8_t txbuflen = rf95_MAX_MESSAGE_LEN; //taille trame à émettre
 uint8_t rxlen = rf95_MAX_MESSAGE_LEN;
 uint8_t FCS[1]; //Champ de controle d'un octet
 uint16_t S; //Code correcteur d'erreur
@@ -26,7 +26,7 @@ uint8_t lSP[2];//SP sur deux octets
 
 
 int i; //Index
-char data_to_send[] = "Salut !";
+char data_to_send[] = "co";
 char str_out[255]; //String for data output on screen
 
 #define E0 0 // Initialize sending
@@ -93,20 +93,20 @@ void loop () {
       txbuf[2] = TYPE_DATA;
       txbuf[3] = TxSeq;
 
-      memcpy(txbuf+4, data_to_send, sizeof(data_to_send)); //Merge frame prefix with payload
+      memcpy(txbuf+4, data_to_send, strlen(data_to_send)); //Merge frame prefix with payload
   	  
       //Add detector error code
       FCS[0] = 0;
-      for (i=0; i<=sizeof(data_to_send)+2; i++)
+      for (i=0; i<=strlen(data_to_send)+3; i++)
       {
         FCS[0] = FCS[0] ^ txbuf[i];
       }
 
-      memcpy(txbuf+sizeof(data_to_send)+3, FCS, sizeof(FCS));
+      memcpy(txbuf+strlen(data_to_send)+4, FCS, sizeof(FCS));
 
       //Add error correcting code
       S=0; SP=0;
-      for (i=0; i<=sizeof(data_to_send)+2; i++)
+      for (i=0; i<=strlen(data_to_send)+3; i++)
       {
         Serial.printf("%d ", txbuf[i]);
         S = S + txbuf[i];
@@ -122,17 +122,17 @@ void loop () {
       lSP[0] = SP & 0x00FF;
       lSP[1] = (SP & 0xFF00) >>8;
 
-      memcpy(txbuf+sizeof(data_to_send)+4, lS, sizeof(lS));
-      memcpy(txbuf+sizeof(data_to_send)+6, lSP, sizeof(lSP));
+      memcpy(txbuf+strlen(data_to_send)+5, lS, sizeof(lS));
+      memcpy(txbuf+strlen(data_to_send)+7, lSP, sizeof(lSP));
 
-      for (i=0; i<=sizeof(data_to_send)+7; i++)
+      for (i=0; i<=strlen(data_to_send)+8; i++)
       {
               Serial.printf("%d ", txbuf[i]);
       } 
 
       Serial.println();
 
-      rf95.send(txbuf, sizeof(data_to_send)+8); //Size of the frame = DATA_TYPE + ACK + Payload = payload size + 2 bytes
+      rf95.send(txbuf, strlen(data_to_send)+9); //Size of the frame = DATA_TYPE + ACK + Payload = payload size + 2 bytes
       rf95.waitPacketSent();
 
       credit--; //Decrement retry count

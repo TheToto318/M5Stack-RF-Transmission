@@ -16,7 +16,7 @@ uint8_t state, i, j, RxSeq, erreur, rang;
 uint32_t attente; //full-duplex
 uint8_t rxbuf[RF95_MAX_MESSAGE_LEN]; // Tableau de trames recues de taille RF95_MAX_MESSAGE_LEN
 uint8_t txbuf[RF95_MAX_MESSAGE_LEN];
-uint8_t rxbuflen = RF95_MAX_MESSAGE_LEN; //Taille max buffer 
+//uint8_t rxbuflen = RF95_MAX_MESSAGE_LEN; //Taille max buffer 
 uint8_t rxlen = RF95_MAX_MESSAGE_LEN; //Taille trame recue
 uint8_t txlen = RF95_MAX_MESSAGE_LEN;
 uint8_t FCSc[1];
