@@ -456,7 +456,7 @@ void receiver() {
     break;
 
     case E2: //Detecting error
-      if (rxbuf[1]!=TxAddr)
+      if (rxbuf[1]!=TxAddr || rxbuf[2] == TYPE_ACK)
       {
         state_rx = E0;
       }      
@@ -504,7 +504,7 @@ void receiver() {
         sprintf(str_out, "Error value : %d, index : %d\r", erreur, rang-1);
         printString(str_out);
 
-        if (rang !=0)
+        if (rang !=0) //Error rank -> if ==0 -> no error 
           {
             sprintf(str_out, "Correcting %d to %d\r", rxbuf[rang-1], rxbuf[rang-1]-erreur);
             printString(str_out);
@@ -513,7 +513,7 @@ void receiver() {
           }
           else
           { 
-          if (SPr != SPc)
+          if (SPr != SPc)//error on last two bytes of redundancy
             {
               sprintf(str_out, "Error on redundancy\r");
               printString(str_out);
