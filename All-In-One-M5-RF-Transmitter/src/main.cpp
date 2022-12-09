@@ -77,6 +77,7 @@ void setup (){
         printString("rf95 init error\r");
     else
         printString("rf95 init OK\r");
+    rf95.setPayloadCRC(false);
     txPower = 8;       //        default values
     frequency = 433.1; //
     set_txPower,set_ModemConfig, set_Frequency, setMode = false; //Start interactive setup
@@ -202,7 +203,6 @@ void setup (){
     printString("Initialization complete\r");
     delay(1000);
 }
-
 
 void loop() {
     switch (mode) {
@@ -353,6 +353,7 @@ switch (state_tx) {
       break;
     
     case E3:
+      //TxSeq = 255;
       if (millis() > attente)
         { state_tx = E4; } //Check for watchdog expiration
       else {
@@ -363,23 +364,24 @@ switch (state_tx) {
             state_tx = E2;
           }
           
-          if (rxbuf[2] != TYPE_ACK) {
+          else if (rxbuf[2] != TYPE_ACK) {
             printString("Frame is not ACK type\r");
             state_tx = E2;
           }
 
-          if (rxbuf[3] != TxSeq) {
+          else if (rxbuf[3] != TxSeq) {
             printString("Incorrect ACK sequence number\r");
             state_tx = E2;
           }
 
-          if ((rxbuf[2] ^ rxbuf[3])!=rxbuf[4]) {
-            printString("ACK frame corrupted, retrying...\r");
+          else if ((rxbuf[2] ^ rxbuf[3])!=rxbuf[4]) {
+            printString("ACK frame corrupted, correcting...\r");
             state_tx = E4;
           }
 
-          state_tx = E5;
-
+          else {
+            state_tx = E5;
+          }
           
           //rxbuf[2] = rxbuf[2] + 1; //simulate XOR error on ACK
         }
@@ -447,7 +449,7 @@ void receiver() {
       if (rf95.recv(rxbuf, &rxlen)){
         printString("\r"); //Move TFT Terminal pointer
         state_rx = E2;
-        rxbuf[4] = 140; // Generate error on frame.
+        rxbuf[4] = 172; // Generate error on frame.
       }
       else {
         delay(2000);
