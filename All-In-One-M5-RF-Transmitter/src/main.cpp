@@ -11,63 +11,63 @@
 RH_RF95 rf95(RFM95_CS, RFM95_DI00); //instance couche radio
 
 /*Interactive configuration variables*/
-int txPower;
-double frequency;
-char str_out[255];
-bool set_txPower;
-bool set_ModemConfig;
-bool set_Frequency;
-bool setMode;
-char *modemConfig[5] = {"Bw125Cr45Sf128", "Bw500Cr45Sf128", "Bw31_25Cr48Sf512", "Bw125Cr48Sf4096", "Bw125Cr45Sf2048"};
-char *message_template[3] = {"Salut !", "Test d'emission du M5Stack !", "1234567890"};
+int txPower; // In dB
+double frequency; //In Mhz -> double type needed -> see RH_RF95 doc
+char str_out[255]; //Buffer for screen output.
+bool set_txPower;     //
+bool set_ModemConfig; // Variables for while loops during intrcative set up.
+bool set_Frequency;   //
+bool setMode;         //
+char *modemConfig[5] = {"Bw125Cr45Sf128", "Bw500Cr45Sf128", "Bw31_25Cr48Sf512", "Bw125Cr48Sf4096", "Bw125Cr45Sf2048"}; //List of available modem config
+char *message_template[3] = {"Salut !", "Test d'emission du M5Stack !", "1234567890"}; //Message template
 
 /* Common constants */
-#define rf95_MAX_MESSAGE_LEN 128 //Taulle max message -> 128 octets.
-#define E0 0 // Initialize sending
-#define E1 1 // Set watchdog
-#define E2 2 // Enable receiver
-#define E3 3 // Wait for frames
-#define E4 4 // Success (ACK and frame number)
-#define E5 5 // Transmission error (watchdog expired)
-#define TxMode 6
-#define RxMode 7
-#define setup_rx 8
-#define setup_tx_sender 9
-#define setup_tx_receiver 10
-#define setup_tx_message 11
+#define rf95_MAX_MESSAGE_LEN 128 // Max payload size
+#define E0 0 // Listen mode / send frame
+#define E1 1 // Frame detection / set watchdog
+#define E2 2 // Detecting error / Listen mode 
+#define E3 3 // Correcting error / Frame detection
+#define E4 4 // Show payload / Failure 
+#define E5 5 // Send ACK / ACK ok
+#define TxMode 6 //Switch case for transfer mode (void loop)
+#define RxMode 7 //Switch case for receiver mode (void loop)
+#define setup_rx 8 // Switch case for to set up receiver mode
+#define setup_tx_sender 9 //Switch case to set up sender address in emitter mode. 
+#define setup_tx_receiver 10 //Switch case to set up receiver address in emitter mode.
+#define setup_tx_message 11 //Switch case to set up message to send in emitter mode.
 
 
-#define TYPE_DATA 1
-#define TYPE_ACK 2
+#define TYPE_DATA 1 //Data type in frame
+#define TYPE_ACK 2 //ACK type in frame
 #define TIMEOUT_ACK 4000 //Watchdog -> 4 sec
 
-uint8_t TxAddr;
-uint8_t RxAddr;
+uint8_t TxAddr; //Sender adress (8 bits)
+uint8_t RxAddr; //Receiver adress (8 bits)
 
-uint8_t mode;
-int i_mes;
+uint8_t mode; //Switch case variable for void loop
+int i_mes; // Index of message template selection
 int i, j;
 
-void sender();
+void sender(); //Declare function to use them in void loop.
 void receiver();
 
 /*Sender variables*/
-uint8_t state_tx, RxSeq, TxSeq, credit, backoff, NewFrame, EIT; //état courant
-uint32_t attente; // Durée chien de garde
-uint8_t txbuf[rf95_MAX_MESSAGE_LEN]; // tableau de trames à émettre de taille rf95_MAX_MESSAGE_LEN 
-uint8_t rxbuf[rf95_MAX_MESSAGE_LEN];
+uint8_t state_tx, RxSeq, TxSeq, credit, backoff, NewFrame, EIT; //Current state
+uint32_t attente; // Watchdog
+uint8_t txbuf[rf95_MAX_MESSAGE_LEN]; // Array to send, unsigned 8 bits elements (max size -> rf95_MAX_MESSAGE_LEN)
+uint8_t rxbuf[rf95_MAX_MESSAGE_LEN]; // Received array, unsigned 8 bits elements (max size -> rf95_MAX_MESSAGE_LEN)
 uint8_t rxlen = rf95_MAX_MESSAGE_LEN;
-uint8_t FCS[1]; //Champ de controle d'un octet
-uint16_t S; //Code correcteur d'erreur
+uint8_t FCS[1]; //calculated error detection value -> use of an one elements array -> easier to add to payload with memcpy
+uint16_t S; //Reed solomon redundancy
 uint16_t SP; 
-uint8_t lS[2]; //S sur deux octets
-uint8_t lSP[2];//SP sur deux octets
+uint8_t lS[2]; //Reed solomon redundancy on two bytes
+uint8_t lSP[2];
 
 /*Receiver variables*/
-uint8_t erreur, rang, state_rx;
-uint8_t FCSc[1];
-uint8_t FCSr;
-uint16_t Sr, SPr, Sc, SPc;
+uint8_t erreur, rang, state_rx; //current state
+uint8_t FCSc[1]; //Calculated error detection value -> use of an one elements array -> easier to add to payload with memcpy
+uint8_t FCSr; //Received error detection code
+uint16_t Sr, SPr, Sc, SPc; // Calculated and received reed solomon redundancy.
 
 void setup (){
     //Serial.begin(115200);
@@ -208,7 +208,7 @@ void loop() {
     switch (mode) {
         case RxMode:
             receiver();
-        break;
+        break;                       //Functions will be runned in loop
         case TxMode:
             sender();
         break;

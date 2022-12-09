@@ -12,7 +12,7 @@
 </a>
 </p>
 
-> Create a layer two and three protocol to establish connection between two M5 Stack node by air using the RadioHead library
+> Create a layer two and three protocol to establish connection between M5 Stack nodes by air using the RadioHead library
 
 ### 🏠 [Homepage](https://github.com/TheToto318/SAE32)
 
@@ -24,6 +24,27 @@ Library used :
 * TFT Terminal for display scrolling
 * M5Stack
 
+## Features
+* All in one script for sender and receiver mode.
+* Interactive set up including :
+    * Transmission power
+    * Frequency
+    * Modulation type
+    * Receiver address in listen mode.
+    * Receiver address, sender address, message template in emitter mode.
+* Error detection code 
+* Reed Solomon redundancy (correcting error)
+* Adaptative payload
+* ACK system + ALOAH
+
 ## Automate scheme
 
-![Workflow](./Automate%20Scheme.drawio.png)
+![Workflow](./Scheme/Automate%20Scheme.drawio.png)
+
+## Frame diagram
+
+![Workflow](./Scheme/Frame%20diagram.drawio.png)
+
+## Frame transfer diagram
+
+![Workflow](./Scheme/Frame%20transfer.drawio.png)
