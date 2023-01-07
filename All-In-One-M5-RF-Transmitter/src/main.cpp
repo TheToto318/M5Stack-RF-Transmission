@@ -57,7 +57,8 @@ uint32_t attente; // Watchdog
 uint8_t txbuf[rf95_MAX_MESSAGE_LEN]; // Array to send, unsigned 8 bits elements (max size -> rf95_MAX_MESSAGE_LEN)
 uint8_t rxbuf[rf95_MAX_MESSAGE_LEN]; // Received array, unsigned 8 bits elements (max size -> rf95_MAX_MESSAGE_LEN)
 uint8_t rxlen = rf95_MAX_MESSAGE_LEN;
-uint8_t FCS[1]; //calculated error detection value -> use of an one elements array -> easier to add to payload with memcpy
+uint16_t FCS; // Computed FCS on 16 bit (unsigned)
+uint8_t lFCS[2]; //calculated error detection value -> use of an two elements array -> easier to add to payload with memcpy
 uint16_t S; //Reed solomon redundancy
 uint16_t SP; 
 uint8_t lS[2]; //Reed solomon redundancy on two bytes
@@ -65,8 +66,8 @@ uint8_t lSP[2];
 
 /*Receiver variables*/
 uint8_t erreur, rang, state_rx; //current state
-uint8_t FCSc[1]; //Calculated error detection value -> use of an one elements array -> easier to add to payload with memcpy
-uint8_t FCSr; //Received error detection code
+uint16_t FCSc; //Calculated error detection value -> use of an one elements array -> easier to add to payload with memcpy
+uint16_t FCSr; //Received error detection code
 uint16_t Sr, SPr, Sc, SPc; // Calculated and received reed solomon redundancy.
 
 void setup (){
@@ -298,13 +299,18 @@ switch (state_tx) {
       memcpy(txbuf+4, message_template[i_mes], strlen(message_template[i_mes])); //Merge frame prefix with payload
   	  
       //Add detector error code
-      FCS[0] = 0;
+      FCS = 6159;
       for (i=0; i<=strlen(message_template[i_mes])+3; i++)
       {
-        FCS[0] = FCS[0] ^ txbuf[i];
+        FCS = FCS ^ txbuf[i];
       }
 
-      memcpy(txbuf+strlen(message_template[i_mes])+4, FCS, sizeof(FCS));
+      lFCS[0] = FCS & 0x00FF;
+      lFCS[1] = (FCS & 0xFF00) >>8;
+
+      Serial.printf("lFCS[0] : %d, lFCS[1] : %d\n", lFCS[0], lFCS[1]);
+      
+      memcpy(txbuf+strlen(message_template[i_mes])+4, lFCS, sizeof(lFCS));
 
       //Add error correcting code
       S=0; SP=0;
@@ -324,17 +330,17 @@ switch (state_tx) {
       lSP[0] = SP & 0x00FF;
       lSP[1] = (SP & 0xFF00) >>8;
 
-      memcpy(txbuf+strlen(message_template[i_mes])+5, lS, sizeof(lS));
-      memcpy(txbuf+strlen(message_template[i_mes])+7, lSP, sizeof(lSP));
+      memcpy(txbuf+strlen(message_template[i_mes])+6, lS, sizeof(lS));
+      memcpy(txbuf+strlen(message_template[i_mes])+8, lSP, sizeof(lSP));
 
-      for (i=0; i<=strlen(message_template[i_mes])+8; i++)
+      for (i=0; i<=strlen(message_template[i_mes])+9; i++)
       {
               Serial.printf("%d ", txbuf[i]);
       } 
 
       Serial.println();
 
-      rf95.send(txbuf, strlen(message_template[i_mes])+9); //Size of the frame = DATA_TYPE + ACK + Payload = payload size + 2 bytes
+      rf95.send(txbuf, strlen(message_template[i_mes])+10); //Size of the frame = DATA_TYPE + ACK + Payload = payload size + 2 bytes
       rf95.waitPacketSent();
 
       credit--; //Decrement retry count
@@ -468,14 +474,14 @@ void receiver() {
           {
               Serial.printf("%d ", rxbuf[i]);
           } 
-          FCSr = rxbuf[rxlen-5];
-          FCSc[0] = 0;
+          FCSr = rxbuf[rxlen-6] + rxbuf[rxlen-5] * 256;
+          FCSc = 6159; //Polynome de degré 12 (CRC-12)
           for (i=0; i<=rxlen-6; i++)
           {
-              FCSc[0] = FCSc[0] ^ rxbuf[i];
+              FCSc = FCSc ^ rxbuf[i];
           }
-          Serial.printf("\nFCSr : %d / FCSc : %d\n", FCSr, FCSc[0]);
-          if (FCSc[0]==FCSr)
+          Serial.printf("\nFCSr : %d / FCSc : %d\n", FCSr, FCSc);
+          if (FCSc==FCSr)
           {
             state_rx = E4;
           }
@@ -489,7 +495,7 @@ void receiver() {
 
       Sc = 0; SPc = 0;
 
-      for (i=0; i<=rxlen-6; i++)
+      for (i=0; i<=rxlen-7; i++)
       {
         Sc = Sc + rxbuf[i];
         SPc = SPc + rxbuf[i]*(i+1);
@@ -537,7 +543,7 @@ void receiver() {
           printString(str_out);
           int h = 0;
           memset(str_out, 0, sizeof(str_out));
-          for (j=4; j<=rxlen-6; j++) //Avoid the 4 first bytes (Source/Dest adddr, DATA_TYPE and RxSeq) and last five bytes of redundancy.
+          for (j=4; j<=rxlen-7; j++) //Avoid the 4 first bytes (Source/Dest adddr, DATA_TYPE and RxSeq) and last five bytes of redundancy.
           {
             str_out[h] = rxbuf[j]; //Geerate the payload string.
             h++;

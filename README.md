@@ -25,17 +25,19 @@ Library used :
 * M5Stack
 
 ## Features
+
 * All in one script for sender and receiver mode.
-* Interactive set up including :
-    * Transmission power
-    * Frequency
-    * Modulation type
-    * Receiver address in listen mode.
-    * Receiver address, sender address, message template in emitter mode.
-* Error detection code 
+* Interactive set up including : 
+  * Transmission power
+  * Frequency
+  * Modulation type
+  * Receiver address in listen mode.
+  * Receiver address, sender address, message template in emitter mode.
+* Error detection code
 * Reed Solomon redundancy (correcting error)
 * Adaptative payload
 * ACK system + ALOAH
+* Use of CRC-12 to compute FCS
 
 ## Automate scheme
 
@@ -48,3 +50,4 @@ Library used :
 ## Frame transfer diagram
 
 ![Workflow](./Scheme/Frame%20transfer.drawio.png)
+
