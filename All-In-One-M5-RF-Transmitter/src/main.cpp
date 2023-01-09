@@ -5,10 +5,12 @@
 #include <string.h>
 #include <M5Stack.h>
 #include "TFT_Terminal.h"
+#include "CRC12.h"
 
 #define RFM95_CS 5 // Output pin -> lora module
 #define RFM95_DI00 36 // Pin d'interruption connecté a la ligne d'interruption du module RFM DIO0 
 RH_RF95 rf95(RFM95_CS, RFM95_DI00); //instance couche radio
+CRC12 crc12;
 
 /*Interactive configuration variables*/
 int txPower; // In dB
@@ -19,6 +21,8 @@ bool set_ModemConfig; // Variables for while loops during intrcative set up.
 bool set_Frequency;   //
 bool setMode;         //
 char *modemConfig[5] = {"Bw125Cr45Sf128", "Bw500Cr45Sf128", "Bw31_25Cr48Sf512", "Bw125Cr48Sf4096", "Bw125Cr45Sf2048"}; //List of available modem config
+//Bandwidth, coding rate, spreading factor
+
 char *message_template[3] = {"Salut !", "Test d'emission du M5Stack !", "1234567890"}; //Message template
 
 /* Common constants */
@@ -71,6 +75,7 @@ uint16_t FCSr; //Received error detection code
 uint16_t Sr, SPr, Sc, SPc; // Calculated and received reed solomon redundancy.
 
 void setup (){
+    crc12.setPolynome(CRC12_DEFAULT_POLYNOME);
     //Serial.begin(115200);
     M5.begin();
     M5.Power.begin();
@@ -80,7 +85,7 @@ void setup (){
         printString("rf95 init OK\r");
     rf95.setPayloadCRC(false);
     txPower = 8;       //        default values
-    frequency = 433.1; //
+    frequency = 868; //
     set_txPower,set_ModemConfig, set_Frequency, setMode = false; //Start interactive setup
     /* ----------------- Set Tx Power interactively ---------------------------------*/
     printString("Set TX Power (default : 8 dBm)\r");
@@ -173,12 +178,12 @@ void setup (){
        if (M5.BtnA.wasPressed() && canal == 0) {i = 0;}
        if (M5.BtnA.wasPressed() && canal != 0) {
            canal--;
-           frequency = 433.1 + canal*0.1;
+           frequency = 868 + canal*0.1;
            M5.Lcd.fillRect(xPos,yDraw,320,16,TFT_BLACK);
        }
        if (M5.BtnC.wasPressed()) {
            canal++;
-           frequency = 433.1 + canal*0.1;
+           frequency = 868 + canal*0.1;
            M5.Lcd.fillRect(xPos,yDraw,320,16,TFT_BLACK);
        }
        if (M5.BtnB.wasPressed()){
@@ -299,16 +304,16 @@ switch (state_tx) {
       memcpy(txbuf+4, message_template[i_mes], strlen(message_template[i_mes])); //Merge frame prefix with payload
   	  
       //Add detector error code
-      FCS = 6159;
       for (i=0; i<=strlen(message_template[i_mes])+3; i++)
       {
-        FCS = FCS ^ txbuf[i];
+        crc12.add(txbuf[i]);
       }
-
+      FCS = crc12.getCRC();
+      
       lFCS[0] = FCS & 0x00FF;
       lFCS[1] = (FCS & 0xFF00) >>8;
 
-      Serial.printf("lFCS[0] : %d, lFCS[1] : %d\n", lFCS[0], lFCS[1]);
+      Serial.printf("FCS : %d, lFCS[0] : %d, lFCS[1] : %d\n", FCS, lFCS[0], lFCS[1]);
       
       memcpy(txbuf+strlen(message_template[i_mes])+4, lFCS, sizeof(lFCS));
 
@@ -455,7 +460,7 @@ void receiver() {
       if (rf95.recv(rxbuf, &rxlen)){
         printString("\r"); //Move TFT Terminal pointer
         state_rx = E2;
-        rxbuf[4] = 172; // Generate error on frame.
+        // rxbuf[4] = 172; // Generate error on frame.
       }
       else {
         delay(2000);
@@ -475,11 +480,11 @@ void receiver() {
               Serial.printf("%d ", rxbuf[i]);
           } 
           FCSr = rxbuf[rxlen-6] + rxbuf[rxlen-5] * 256;
-          FCSc = 6159; //Polynome de degré 12 (CRC-12)
           for (i=0; i<=rxlen-6; i++)
           {
-              FCSc = FCSc ^ rxbuf[i];
+              crc12.add(rxbuf[i]);
           }
+          FCSc = crc12.getCRC();
           Serial.printf("\nFCSr : %d / FCSc : %d\n", FCSr, FCSc);
           if (FCSc==FCSr)
           {
